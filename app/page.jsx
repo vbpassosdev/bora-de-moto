@@ -6,6 +6,7 @@ export default function Home() {
       <aside>
         <div className="brand">◈ bora de moto<span>.</span><small>MENOS ROTINA, MAIS ESTRADA</small></div>
         <nav id="nav" />
+        <a href="/diario" style={{display:"block",fontWeight:600,padding:"12px",color:"inherit"}}>Viagens realizadas</a>
         <div className="sidefoot">
           ⌖ Seu ponto de partida<br /><b>Pedreira, São Paulo</b>
           <hr style={{ border: 0, borderTop: "1px solid var(--line)", margin: "22px 0" }} />
@@ -21,6 +22,7 @@ export default function Home() {
           </div>
           <span className="muted">⌖ Pedreira, SP · Brasil</span>
         </header>
+        <p><a href="/diario">Abrir diário de viagens realizadas →</a></p>
         <div id="app" />
         <footer>Bora de Moto · Feito para colecionar caminhos.<br />Planos salvos neste navegador · Exporte uma cópia para guardar ou transferir.</footer>
       </main>
