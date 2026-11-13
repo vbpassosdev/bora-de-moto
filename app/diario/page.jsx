@@ -14,6 +14,9 @@ export default function Diario() {
   const [dados, setDados] = useState(null), [chave, setChave] = useState("");
   const [edicao, editar] = useState(null), [exato, setExato] = useState(false);
   const [aviso, avisar] = useState(""), [ocupado, ocupar] = useState(false);
+  const [selecionada, selecionar] = useState("");
+  const viagens = [...(dados?.viagens || [])].sort((a,b) => b.data.localeCompare(a.data));
+  const atual = viagens.find(v => v.id === selecionada) || viagens[0];
   async function carregar() {
     try {
       const r = await fetch("/api/diario", { cache: "no-store" });
@@ -55,11 +58,21 @@ export default function Diario() {
         body: JSON.stringify({ viagem: edicao, versao: dados.versao }) });
       const resultado = await r.json();
       if (!r.ok) throw Error(resultado.erro);
-      setDados(resultado); editar(null); avisar("Viagem salva no diário público.");
+      setDados(resultado); selecionar(edicao.id); editar(null); avisar("Viagem salva no diário público.");
     } catch (e) { avisar(e.message); } finally { ocupar(false); }
   }
   return <main className="diario">
-    <a href="/">← Voltar ao planejador</a><h1>Viagens realizadas</h1>
+    <header className="diario-topo"><strong>Bora de Moto</strong><a href="/planejar">Planejar viagem →</a></header>
+    <h1>Viagens realizadas</h1>
+    {dados && !edicao && <nav className="destinos" aria-label="Selecionar viagem realizada">
+      {viagens.map(v => {
+        const capa = v.midias.find(m => m.tipo.startsWith("image/"));
+        return <button key={v.id} type="button" aria-pressed={atual?.id === v.id} onClick={() => selecionar(v.id)}>
+          {capa && <img src={capa.url} alt="" loading="lazy" />}
+          <span><strong>{v.destino}</strong><time dateTime={v.data}>{dataLegivel(v.data)}</time></span>
+        </button>;
+      })}
+    </nav>}
     {aviso && <p role="status" className="notice">{aviso}</p>}
     {!dados && (aviso ? <button onClick={carregar}>Tentar novamente</button> : <p>Carregando viagens…</p>)}
     {dados && chave && !edicao && <button className="primary" onClick={() => abrir({ id: crypto.randomUUID(), destino: "", data: "", roteiro: "", midias: [] })}>+ Registrar viagem realizada</button>}
@@ -74,7 +87,7 @@ export default function Diario() {
       <ul>{edicao.midias.map(m => <li key={m.url}>{m.nome}</li>)}</ul>
       <button className="primary">Salvar viagem</button> <button type="button" onClick={() => { editar(null); carregar(); }}>Fechar edição</button>
     </fieldset></form>}
-    {dados && [...dados.viagens].sort((a,b) => b.data.localeCompare(a.data)).map(v => <article className="section" key={v.id}>
+    {atual && !edicao && [atual].map(v => <article className="section" key={v.id}>
       <div className="heading"><div><time dateTime={v.data}>{dataLegivel(v.data)}</time><h2>{v.destino}</h2></div>
       {chave && !edicao && <button onClick={() => abrir(v)}>Editar viagem</button>}</div>
       <h3>Roteiro realizado</h3><p className="relato">{v.roteiro || "Roteiro ainda não registrado."}</p>
