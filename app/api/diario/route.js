@@ -19,9 +19,11 @@ export async function POST(req) {
     const { viagem, versao } = await req.json();
     if (!viagem || !/^[a-z0-9-]{1,64}$/.test(viagem.id) || !viagem.destino?.trim() || viagem.destino.length > 120 ||
         !/^\d{4}-(0[1-9]|1[0-2])(-([0-2]\d|3[01]))?$/.test(viagem.data) ||
-        typeof viagem.roteiro !== "string" || viagem.roteiro.length > 30000 || !Array.isArray(viagem.midias) ||
-        viagem.midias.some(m => !tipos.includes(m.tipo) || !/^https:\/\/[a-z0-9]+\.public\.blob\.vercel-storage\.com\/galeria\/[a-z0-9.-]+$/.test(m.url) || typeof m.nome !== "string"))
+        typeof viagem.roteiro !== "string" || viagem.roteiro.length > 30000 || !Array.isArray(viagem.midias))
       return resposta({ erro: "Confira os campos da viagem." }, 400);
+    const urlGaleria = /^https:\/\/[A-Za-z0-9]+\.public\.blob\.vercel-storage\.com\/galeria\/[A-Za-z0-9._-]+$/;
+    if (viagem.midias.some(m => !m || !tipos.includes(m.tipo) || !urlGaleria.test(m.url) || typeof m.nome !== "string"))
+      return resposta({ erro: "Confira o tipo e o endereço dos arquivos anexados." }, 400);
     const atual = await ler();
     if (versao !== atual.versao) return resposta({ erro: "O diário mudou em outro aparelho. Reabra a viagem antes de editar." }, 409);
     const viagens = [...atual.viagens.filter(v => v.id !== viagem.id), viagem];
