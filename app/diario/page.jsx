@@ -40,7 +40,7 @@ export default function Diario() {
       for (const file of files) {
         const index = tipos.indexOf(file.type);
         if (index < 0 || file.size > limite) throw Error("Escolha foto JPG, PNG, WebP ou vídeo MP4, WebM ou MOV de até 250 MB.");
-        avisar("Enviando " + file.name + "…");
+        avisar(file.type.startsWith("video/") ? "Enviando vídeo…" : "Enviando " + file.name + "…");
         const ext = ["jpg","png","webp","mp4","webm","mov"][index];
         const blob = await upload("galeria/" + crypto.randomUUID() + "." + ext, file, {
           access: "public", handleUploadUrl: "/api/midias", clientPayload: chave,
@@ -84,7 +84,7 @@ export default function Diario() {
       <label>Roteiro realizado<textarea rows={6} maxLength={30000} placeholder="Por onde passou? Registre as etapas, paradas e lugares que visitou." value={edicao.roteiro} onChange={e => alterar("roteiro", e.target.value)} /></label>
       <label>Adicionar fotos e vídeos públicos<input type="file" multiple accept={tipos.join(",")} onChange={e => { const files = Array.from(e.target.files); e.target.value = ""; anexar(files); }} /></label>
       <small>Até 250 MB por arquivo. Os arquivos enviados ficam acessíveis por link.</small>
-      <ul>{edicao.midias.map(m => <li key={m.url}>{m.nome}</li>)}</ul>
+      <ul>{edicao.midias.map(m => <li key={m.url}>{m.tipo.startsWith("video/") ? "Vídeo" : m.nome}</li>)}</ul>
       <button className="primary">Salvar viagem</button> <button type="button" onClick={() => { editar(null); carregar(); }}>Fechar edição</button>
     </fieldset></form>}
     {atual && !edicao && [atual].map(v => <article className="section" key={v.id}>
@@ -92,7 +92,7 @@ export default function Diario() {
       {chave && !edicao && <button onClick={() => abrir(v)}>Editar viagem</button>}</div>
       <h3>Roteiro realizado</h3><p className="relato">{v.roteiro || "Roteiro ainda não registrado."}</p>
       <h3>Fotos e vídeos</h3>{!v.midias.length && <p>Nenhuma mídia adicionada.</p>}
-      <div className="galeria">{v.midias.map(m => <figure key={m.url}>{m.tipo.startsWith("video/") ? <video controls playsInline preload="metadata" src={m.url} /> : <a href={m.url}><img loading="lazy" alt={m.nome} src={m.url} /></a>}<figcaption>{m.nome}</figcaption></figure>)}</div>
+      <div className="galeria">{v.midias.map(m => <figure key={m.url}>{m.tipo.startsWith("video/") ? <video controls playsInline preload="metadata" src={m.url} /> : <><a href={m.url}><img loading="lazy" alt={m.nome} src={m.url} /></a><figcaption>{m.nome}</figcaption></>}</figure>)}</div>
     </article>)}
   </main>;
 }
