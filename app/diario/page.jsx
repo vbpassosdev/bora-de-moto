@@ -14,7 +14,7 @@ export default function Diario() {
   const [dados, setDados] = useState(null), [chave, setChave] = useState("");
   const [edicao, editar] = useState(null), [exato, setExato] = useState(false);
   const [aviso, avisar] = useState(""), [ocupado, ocupar] = useState(false);
-  const [selecionada, selecionar] = useState("");
+  const [selecionada, selecionar] = useState(""), [acessos, setAcessos] = useState(null);
   const viagens = [...(dados?.viagens || [])].sort((a,b) => b.data.localeCompare(a.data));
   const atual = viagens.find(v => v.id === selecionada) || viagens[0];
   async function carregar() {
@@ -29,6 +29,13 @@ export default function Diario() {
     if (k) { sessionStorage.setItem("diario-editar", k); history.replaceState(null, "", location.pathname); }
     setChave(sessionStorage.getItem("diario-editar") || "");
     carregar();
+    // Conta uma visita por sessão do navegador; recarregar a página só consulta o total.
+    let contada = false;
+    try { contada = sessionStorage.getItem("diario-acesso") === "1"; } catch {}
+    fetch("/api/acessos", { method: contada ? "GET" : "POST", cache: "no-store" })
+      .then(r => r.ok ? r.json() : null)
+      .then(r => { if (r) { setAcessos(r.total); try { sessionStorage.setItem("diario-acesso", "1"); } catch {} } })
+      .catch(() => {});
   }, []);
   function abrir(v) {
     editar({ ...v }); setExato(v.data.length === 10); avisar("");
@@ -94,5 +101,6 @@ export default function Diario() {
       <h3>Fotos e vídeos</h3>{!v.midias.length && <p>Nenhuma mídia adicionada.</p>}
       <div className="galeria">{v.midias.map(m => <figure key={m.url}>{m.tipo.startsWith("video/") ? <video controls playsInline preload="metadata" src={m.url} /> : <><a href={m.url}><img loading="lazy" alt={m.nome} src={m.url} /></a><figcaption>{m.nome}</figcaption></>}</figure>)}</div>
     </article>)}
+    {acessos !== null && <footer className="acessos">{acessos.toLocaleString("pt-BR")} {acessos === 1 ? "acesso" : "acessos"} ao diário</footer>}
   </main>;
 }
