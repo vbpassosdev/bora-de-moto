@@ -18,7 +18,7 @@ export function proxy(request) {
 
 export const config = {
   matcher: [{
-    source: "/:pagina(diario|planejar)?",
+    source: "/:pagina(diario|planejar|planejar/serra-da-macaca)?",
     missing: [
       { type: "header", key: "next-router-prefetch" },
       { type: "header", key: "purpose", value: "prefetch" },
