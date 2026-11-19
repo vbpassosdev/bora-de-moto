@@ -11,10 +11,26 @@ for (const trip of trips) {
   radarUpdated = true;
 }
 if (radarUpdated) localStorage.setItem('bora-v1', JSON.stringify(trips));
+// Os dois roteiros iniciais já constam no diário de viagens realizadas.
+let diaryReviewed = false;
+for (const trip of trips) {
+  const originalName = ['Ubatuba', 'Carrancas'][trip.id];
+  if (!originalName || trip.name !== originalName || trip.diaryReviewed) continue;
+  if (!trip.date && trip.status === 'Planejando') trip.status = 'Concluída';
+  trip.diaryReviewed = true;
+  diaryReviewed = true;
+}
+if (diaryReviewed) localStorage.setItem('bora-v1', JSON.stringify(trips));
+
+function plannedKilometers(trips) {
+  return trips
+    .filter(trip => trip.status === 'Planejando' || trip.status === 'Confirmada')
+    .reduce((total, trip) => total + Number(trip.chosen ? trip.altkm : trip.km), 0);
+}
 const expeditionId = -476;
 if (!trips.some(trip => trip.id === expeditionId)) {
   trips = [...trips, {
-    ...defaults[0], id: expeditionId, name: 'Expedição Rastro da Serpente', state: 'SP / PR',
+    ...defaults[0], status: 'Planejando', id: expeditionId, name: 'Expedição Rastro da Serpente', state: 'SP / PR',
     subtitle: 'Quatro pessoas · Honda CB 500X e Suzuki Boulevard 800',
     roundTrip: true, days: 4, km: 1150, hours: '21h', via: 'Ida pelo Rastro da Serpente e volta pela Régis Bittencourt',
     alt: '', altkm: '', alth: '', photo: photos[3],
@@ -173,7 +189,7 @@ function saveNights(form) {
     };
   }
 }
-function dashboard(){return `<section class="hero"><span class="tag">SUA PRÓXIMA HISTÓRIA COMEÇA AQUI</span><h2>A melhor parte é<br>o caminho.</h2><p>Da serra ao mar, todas as suas aventuras em um só lugar.</p><button onclick="editTrip(true)">＋ Planejar nova viagem</button><span class="coords">22°44′ S &nbsp; 46°54′ O</span></section><div class="stats"><div class="stat"><small>↗ Viagens no radar</small><strong>${trips.filter(trip => trip.status === 'No radar').length} <small style="font-size:12px;font-weight:400">destinos</small></strong></div><div class="stat"><small>⌁ Quilômetros planejados</small><strong>${trips.reduce((a,x)=>a+Number(x.chosen?x.altkm:x.km),0).toLocaleString('pt-BR')} <small style="font-size:12px">km</small></strong></div><div class="stat"><small>▦ Próximas saídas</small><strong>${trips.filter(x=>x.date&&x.date>=new Date().toISOString().slice(0,10)).length} <small style="font-size:12px">agendadas</small></strong></div><div class="stat"><small>☑ Preparação de ${esc(t().name)}</small><strong>${Math.round(t().checks.length/items.length*100)}<small style="font-size:15px">%</small></strong></div></div><div class="heading"><h2>Suas próximas aventuras</h2><div class="filters">${['Todas','No radar','Planejando','Confirmada'].map(x=>`<button class="${filter===x?'active':''}" onclick="filter='${x}';render()">${x}</button>`).join('')}</div></div><div class="cards">${trips.filter(x=>filter==='Todas'||x.status===filter).map(x=>`<article class="card ${selected===x.id?'selected':''}" tabindex="0" role="button" onkeydown="if(event.key==='Enter'){this.click()}" onclick="selected=${x.id};tab='Roteiro';render();document.querySelector('.detailhead').scrollIntoView()"><div class="photo" style="background-image:url(https://images.unsplash.com/${x.photo}?auto=format&fit=crop&w=600&q=80)"><span class="tag">${esc(x.status)}</span></div><div class="cardbody"><h3>${esc(x.name)} <small class="muted">${esc(x.state)}</small></h3><small class="muted">${esc(x.subtitle)}</small><div class="meta">⌖ Pedreira → ${esc(x.name)}</div><div class="cardfooter"><span>${x.chosen?x.altkm:x.km} km · ${x.days} dias</span><span>${dateRange(x)} ↗</span></div></div></article>`).join('')||'<div class="empty">Nenhuma viagem com esse status.</div>'}</div>${detail()}`}
+function dashboard(){return `<section class="hero"><span class="tag">SUA PRÓXIMA HISTÓRIA COMEÇA AQUI</span><h2>A melhor parte é<br>o caminho.</h2><p>Da serra ao mar, todas as suas aventuras em um só lugar.</p><button onclick="editTrip(true)">＋ Planejar nova viagem</button><span class="coords">22°44′ S &nbsp; 46°54′ O</span></section><div class="stats"><div class="stat"><small>↗ Viagens no radar</small><strong>${trips.filter(trip => trip.status === 'No radar').length} <small style="font-size:12px;font-weight:400">destinos</small></strong></div><div class="stat"><small>⌁ Quilômetros planejados</small><strong>${plannedKilometers(trips).toLocaleString('pt-BR')} <small style="font-size:12px">km</small></strong></div><div class="stat"><small>▦ Próximas saídas</small><strong>${trips.filter(x=>x.date&&x.date>=new Date().toISOString().slice(0,10)).length} <small style="font-size:12px">agendadas</small></strong></div><div class="stat"><small>☑ Preparação de ${esc(t().name)}</small><strong>${Math.round(t().checks.length/items.length*100)}<small style="font-size:15px">%</small></strong></div></div><div class="heading"><h2>Suas próximas aventuras</h2><div class="filters">${['Todas','No radar','Planejando','Confirmada'].map(x=>`<button class="${filter===x?'active':''}" onclick="filter='${x}';render()">${x}</button>`).join('')}</div></div><div class="cards">${trips.filter(x=>filter==='Todas'||x.status===filter).map(x=>`<article class="card ${selected===x.id?'selected':''}" tabindex="0" role="button" onkeydown="if(event.key==='Enter'){this.click()}" onclick="selected=${x.id};tab='Roteiro';render();document.querySelector('.detailhead').scrollIntoView()"><div class="photo" style="background-image:url(https://images.unsplash.com/${x.photo}?auto=format&fit=crop&w=600&q=80)"><span class="tag">${esc(x.status)}</span></div><div class="cardbody"><h3>${esc(x.name)} <small class="muted">${esc(x.state)}</small></h3><small class="muted">${esc(x.subtitle)}</small><div class="meta">⌖ Pedreira → ${esc(x.name)}</div><div class="cardfooter"><span>${x.chosen?x.altkm:x.km} km · ${x.days} dias</span><span>${dateRange(x)} ↗</span></div></div></article>`).join('')||'<div class="empty">Nenhuma viagem com esse status.</div>'}</div>${detail()}`}
 function detail(){let x=t();return `<section class="section"><div class="detailhead"><div><div class="eyebrow">ROTEIRO EM CONSTRUÇÃO</div><h2>Pedreira → ${esc(x.name)}</h2><span class="muted">${dateRange(x)} · ${x.days} dias · ${x.chosen?x.altkm:x.km} ${x.roundTrip?'km no circuito':'km de ida'} estimados</span></div><div><button onclick="editTrip(false)">✎ Editar viagem</button> <button class="primary" onclick="tab='Rotas';render()">⇄ Comparar rotas</button></div></div><div class="tabs">${['Roteiro','Rotas','Clima','Checklist','Hospedagem e notas'].map(n=>`<button class="${tab===n?'active':''}" onclick="tab='${n}';render()">${n}</button>`).join('')}</div>${tab==='Roteiro'?route():tab==='Rotas'?compare():tab==='Clima'?weather():tab==='Checklist'?checklist():lodging()}</section>`}
 function mapDirections(origin, destination, via = '') {
   const params = new URLSearchParams({api: '1', origin, destination, travelmode: 'driving'});
