@@ -78,7 +78,7 @@ if (savedExpedition && !savedExpedition.carnaval2027Agendado) {
   localStorage.setItem('bora-v1', JSON.stringify(trips));
 }
 let selected=trips.find(trip => trip.status === 'Planejando')?.id ?? trips[0]?.id,page='Viagens',tab='Roteiro',filter='Todas',month=new Date().getMonth(),year=new Date().getFullYear();const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const t=()=>trips.find(x=>x.id===selected)||trips[0];const save=()=>{localStorage.setItem('bora-v1',JSON.stringify(trips))};function toast(s){let e=document.getElementById('toast');e.textContent=s;e.hidden=false;setTimeout(()=>e.hidden=true,3000)}const date=s=>s?new Date(s+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'short'}):'Data a definir';
-function render(){document.getElementById('nav').innerHTML=['Viagens','Calendário','Preparação'].map((n,i)=>`<button class="${page===n?'active':''}" onclick="page='${n}';render()">${['▧','▦','☑'][i]} &nbsp; ${n}</button>`).join('')+`<button onclick="backup()">↗ &nbsp; Exportar planos</button>`;document.getElementById('app').innerHTML=page==='Calendário'?calendar():page==='Preparação'?`<div class="section"><div class="heading"><h2>Preparação para a estrada</h2>${selectTrip()}</div>${checklist()}</div>`:dashboard();}
+function render(){document.getElementById('nav').innerHTML=['Viagens','Calendário','Preparação'].map((n,i)=>`<button class="${page===n?'active':''}" onclick="page='${n}';render()">${['▧','▦','☑'][i]} &nbsp; ${n}</button>`).join('')+`<button onclick="backup()">↗ &nbsp; Exportar planos</button>`;document.getElementById('app').innerHTML=page==='Calendário'?calendar():page==='Preparação'?`<div class="section"><div class="heading"><h2>Preparação para a estrada</h2>${selectTrip()}</div>${checklist()}</div>`:dashboard();showOfflineStatus();}
 function selectTrip(){return `<select style="width:210px" onchange="selected=Number(this.value);render()">${trips.map(x=>`<option value="${x.id}" ${x.id===selected?'selected':''}>${esc(x.name)}</option>`).join('')}</select>`}
 
 function calendarDay(trip, day) {
@@ -190,7 +190,80 @@ function saveNights(form) {
   }
 }
 function dashboard(){return `<section class="hero"><span class="tag">SUA PRÓXIMA HISTÓRIA COMEÇA AQUI</span><h2>A melhor parte é<br>o caminho.</h2><p>Da serra ao mar, todas as suas aventuras em um só lugar.</p><button onclick="editTrip(true)">＋ Planejar nova viagem</button><span class="coords">22°44′ S &nbsp; 46°54′ O</span></section><div class="stats"><div class="stat"><small>↗ Viagens no radar</small><strong>${trips.filter(trip => trip.status === 'No radar').length} <small style="font-size:12px;font-weight:400">destinos</small></strong></div><div class="stat"><small>⌁ Quilômetros planejados</small><strong>${plannedKilometers(trips).toLocaleString('pt-BR')} <small style="font-size:12px">km</small></strong></div><div class="stat"><small>▦ Próximas saídas</small><strong>${trips.filter(x=>x.date&&x.date>=new Date().toISOString().slice(0,10)).length} <small style="font-size:12px">agendadas</small></strong></div><div class="stat"><small>☑ Preparação de ${esc(t().name)}</small><strong>${Math.round(t().checks.length/items.length*100)}<small style="font-size:15px">%</small></strong></div></div><div class="heading"><h2>Suas próximas aventuras</h2><div class="filters">${['Todas','Planejando','Confirmada','No radar','Concluída'].map(x=>`<button class="${filter===x?'active':''}" onclick="filter='${x}';render()">${x}</button>`).join('')}</div></div><div class="cards">${trips.filter(x=>filter==='Todas'||x.status===filter).sort((a,b)=>Number(b.status==='Planejando')-Number(a.status==='Planejando')).map(x=>`<article class="card ${selected===x.id?'selected':''}" tabindex="0" role="button" onkeydown="if(event.key==='Enter'){this.click()}" onclick="selected=${x.id};tab='Roteiro';render();document.querySelector('.detailhead').scrollIntoView()"><div class="photo" style="background-image:url(https://images.unsplash.com/${x.photo}?auto=format&fit=crop&w=600&q=80)"><span class="tag">${esc(x.status)}</span></div><div class="cardbody"><h3>${esc(x.name)} <small class="muted">${esc(x.state)}</small></h3><small class="muted">${esc(x.subtitle)}</small><div class="meta">⌖ Pedreira → ${esc(x.name)}</div><div class="cardfooter"><span>${x.chosen?x.altkm:x.km} km · ${x.days} dias</span><span>${dateRange(x)} ↗</span></div></div></article>`).join('')||'<div class="empty">Nenhuma viagem com esse status.</div>'}</div>${detail()}`}
-function detail(){let x=t();return `<section class="section"><div class="detailhead"><div><div class="eyebrow">ROTEIRO EM CONSTRUÇÃO</div><h2>Pedreira → ${esc(x.name)}</h2><span class="muted">${dateRange(x)} · ${x.days} dias · ${x.chosen?x.altkm:x.km} ${x.roundTrip?'km no circuito':'km de ida'} estimados</span></div><div><button onclick="editTrip(false)">✎ Editar viagem</button> <button class="primary" onclick="tab='Rotas';render()">⇄ Comparar rotas</button></div></div><div class="tabs">${['Roteiro','Rotas','Clima','Checklist','Hospedagem e notas'].map(n=>`<button class="${tab===n?'active':''}" onclick="tab='${n}';render()">${n}</button>`).join('')}</div>${tab==='Roteiro'?route():tab==='Rotas'?compare():tab==='Clima'?weather():tab==='Checklist'?checklist():lodging()}</section>`}
+const offlineCache = 'bora-viagens-offline-v1';
+const offlinePath = trip => '/viagens-offline/' + encodeURIComponent(trip.id);
+
+async function showOfflineStatus() {
+  const label = document.getElementById('offline-status');
+  if (!label || !window.caches) return;
+  const trip = t();
+  try {
+    const copy = await caches.match(offlinePath(trip), {cacheName: offlineCache});
+    if (!copy || !label.isConnected) return;
+    label.innerHTML = 'Disponível offline neste aparelho · <a href="' + offlinePath(trip) + '">Abrir cópia salva</a>';
+    label.hidden = false;
+    document.getElementById('baixar-viagem').textContent = 'Atualizar cópia offline';
+  } catch { /* O download informa eventuais erros de armazenamento. */ }
+}
+
+async function downloadTrip(button) {
+  const trip = structuredClone(t());
+  const label = document.getElementById('offline-status');
+  label.hidden = false;
+  button.disabled = true;
+  label.textContent = 'Salvando roteiro neste aparelho…';
+  try {
+    await navigator.serviceWorker.register('/sw.js');
+    await navigator.serviceWorker.ready;
+    const legs = trip.stops.map(s => s.split(' → '));
+    const figure = document.createElement('div');
+    if (legs.length && legs.every(leg => leg.length === 2)) figure.innerHTML = circuitPreview(trip, legs);
+    const image = figure.querySelector('image');
+    if (image) {
+      try {
+        const res = await fetch(image.getAttribute('href'), {signal: AbortSignal.timeout(6500)});
+        if (!res.ok || !res.headers.get('content-type')?.startsWith('image/')) throw Error();
+        const blob = await res.blob();
+        const reader = new FileReader();
+        const data = await new Promise((resolve,reject) => {
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        image.setAttribute('href',data);
+      } catch {
+        image.remove();
+        figure.querySelector('figcaption').textContent = 'Traçado aproximado das etapas.';
+      }
+    }
+    const stages = trip.stops.map((stop,i) => `<section><small>${esc(dayLabel(trip,stepDay(trip,i)))}</small>
+      <h2>${esc(stop)}</h2><b>${esc(trip.kms[i])} km · ${esc(trip.times[i])}</b>
+      <p>${esc(arrival(trip,i))}</p><p>${esc(trip.notes[i])}</p></section>`).join('');
+    const nights = Array.from({length: Math.max(0, trip.days-1)}, (_,i) => {
+      const night = trip.nights?.[i] || {};
+      const city = night.city ?? (trip.id === expeditionId ? ['Apiaí','Curitiba','Miracatu'][i] : '');
+      return `<section><b>${esc(dayLabel(trip,i+1))} · ${esc(city || 'Cidade a definir')}</b>
+        <p>${esc(night.hotel || 'Hospedagem a definir')} · ${esc(night.status || 'Pendente')}</p>
+        <p>Estacionamento para motos: ${night.parking ? 'confirmado' : 'a confirmar'}</p></section>`;
+    }).join('');
+    const html = `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+      <title>${esc(trip.name)} · Bora de Moto</title><style>body{max-width:680px;margin:auto;padding:20px;color:#193b2f;background:#fafaf6;font:16px/1.5 system-ui}section{background:white;border:1px solid #d7dfd5;border-radius:12px;padding:15px;margin:10px 0}h2,p{margin:6px 0}p{white-space:pre-line}a{color:#244739}</style>
+      <main><a href="/viagens-offline/">Viagens baixadas</a> · <a href="/planejar">Planejador</a>
+      <h1>${esc(trip.name)}</h1><p>${esc(dateRange(trip))} · ${esc(trip.chosen ? trip.altkm : trip.km)} km</p>
+      <small>Cópia salva em ${new Date().toLocaleString('pt-BR')}</small>${figure.innerHTML}${stages}
+      <h2>Hospedagem e notas</h2>${nights}<p>${esc(trip.hotel)}</p><p>${esc(trip.obs)}</p></main></html>`;
+    const cache = await caches.open(offlineCache);
+    await cache.put(offlinePath(trip),new Response(html,{headers:{
+      'Content-Type':'text/html; charset=utf-8','X-Bora-Title':encodeURIComponent(trip.name),
+      'Content-Security-Policy': "default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'"
+    }}));
+    if (label.isConnected) await showOfflineStatus();
+  } catch {
+    label.textContent = 'Falha ao salvar a viagem. Confira a conexão e o espaço disponível e tente novamente.';
+  } finally { button.disabled = false; }
+}
+
+function detail(){let x=t();return `<section class="section"><div class="detailhead"><div><div class="eyebrow">ROTEIRO EM CONSTRUÇÃO</div><h2>Pedreira → ${esc(x.name)}</h2><span class="muted">${dateRange(x)} · ${x.days} dias · ${x.chosen?x.altkm:x.km} ${x.roundTrip?'km no circuito':'km de ida'} estimados</span></div><div><button id="baixar-viagem" onclick="downloadTrip(this)">Baixar viagem</button> <button onclick="editTrip(false)">✎ Editar viagem</button> <button class="primary" onclick="tab='Rotas';render()">⇄ Comparar rotas</button></div></div><p id="offline-status" role="status" class="muted" hidden></p><div class="tabs">${['Roteiro','Rotas','Clima','Checklist','Hospedagem e notas'].map(n=>`<button class="${tab===n?'active':''}" onclick="tab='${n}';render()">${n}</button>`).join('')}</div>${tab==='Roteiro'?route():tab==='Rotas'?compare():tab==='Clima'?weather():tab==='Checklist'?checklist():lodging()}</section>`}
 function mapDirections(origin, destination, via = '') {
   const params = new URLSearchParams({api: '1', origin, destination, travelmode: 'driving', maptype: 'satellite'});
   if (via) params.set('waypoints', via);
