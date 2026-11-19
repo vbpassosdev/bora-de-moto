@@ -23,7 +23,7 @@ export default function Home() {
           <span className="muted">⌖ Pedreira, SP · Brasil</span>
         </header>
         <p><a href="/">Abrir diário de viagens realizadas →</a></p>
-        <div id="app" />
+        <div id="app" data-maps-key={process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY} />
         <footer>Bora de Moto · Feito para colecionar caminhos.<br />Planos salvos neste navegador · Exporte uma cópia para guardar ou transferir.</footer>
       </main>
       <dialog id="modal" />
