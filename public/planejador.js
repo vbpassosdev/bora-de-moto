@@ -192,9 +192,55 @@ function saveNights(form) {
 function dashboard(){return `<section class="hero"><span class="tag">SUA PRÓXIMA HISTÓRIA COMEÇA AQUI</span><h2>A melhor parte é<br>o caminho.</h2><p>Da serra ao mar, todas as suas aventuras em um só lugar.</p><button onclick="editTrip(true)">＋ Planejar nova viagem</button><span class="coords">22°44′ S &nbsp; 46°54′ O</span></section><div class="stats"><div class="stat"><small>↗ Viagens no radar</small><strong>${trips.filter(trip => trip.status === 'No radar').length} <small style="font-size:12px;font-weight:400">destinos</small></strong></div><div class="stat"><small>⌁ Quilômetros planejados</small><strong>${plannedKilometers(trips).toLocaleString('pt-BR')} <small style="font-size:12px">km</small></strong></div><div class="stat"><small>▦ Próximas saídas</small><strong>${trips.filter(x=>x.date&&x.date>=new Date().toISOString().slice(0,10)).length} <small style="font-size:12px">agendadas</small></strong></div><div class="stat"><small>☑ Preparação de ${esc(t().name)}</small><strong>${Math.round(t().checks.length/items.length*100)}<small style="font-size:15px">%</small></strong></div></div><div class="heading"><h2>Suas próximas aventuras</h2><div class="filters">${['Todas','Planejando','Confirmada','No radar'].map(x=>`<button class="${filter===x?'active':''}" onclick="filter='${x}';render()">${x}</button>`).join('')}</div></div><div class="cards">${trips.filter(x=>filter==='Todas'||x.status===filter).sort((a,b)=>Number(b.status==='Planejando')-Number(a.status==='Planejando')).map(x=>`<article class="card ${selected===x.id?'selected':''}" tabindex="0" role="button" onkeydown="if(event.key==='Enter'){this.click()}" onclick="selected=${x.id};tab='Roteiro';render();document.querySelector('.detailhead').scrollIntoView()"><div class="photo" style="background-image:url(https://images.unsplash.com/${x.photo}?auto=format&fit=crop&w=600&q=80)"><span class="tag">${esc(x.status)}</span></div><div class="cardbody"><h3>${esc(x.name)} <small class="muted">${esc(x.state)}</small></h3><small class="muted">${esc(x.subtitle)}</small><div class="meta">⌖ Pedreira → ${esc(x.name)}</div><div class="cardfooter"><span>${x.chosen?x.altkm:x.km} km · ${x.days} dias</span><span>${dateRange(x)} ↗</span></div></div></article>`).join('')||'<div class="empty">Nenhuma viagem com esse status.</div>'}</div>${detail()}`}
 function detail(){let x=t();return `<section class="section"><div class="detailhead"><div><div class="eyebrow">ROTEIRO EM CONSTRUÇÃO</div><h2>Pedreira → ${esc(x.name)}</h2><span class="muted">${dateRange(x)} · ${x.days} dias · ${x.chosen?x.altkm:x.km} ${x.roundTrip?'km no circuito':'km de ida'} estimados</span></div><div><button onclick="editTrip(false)">✎ Editar viagem</button> <button class="primary" onclick="tab='Rotas';render()">⇄ Comparar rotas</button></div></div><div class="tabs">${['Roteiro','Rotas','Clima','Checklist','Hospedagem e notas'].map(n=>`<button class="${tab===n?'active':''}" onclick="tab='${n}';render()">${n}</button>`).join('')}</div>${tab==='Roteiro'?route():tab==='Rotas'?compare():tab==='Clima'?weather():tab==='Checklist'?checklist():lodging()}</section>`}
 function mapDirections(origin, destination, via = '') {
-  const params = new URLSearchParams({api: '1', origin, destination, travelmode: 'driving'});
+  const params = new URLSearchParams({api: '1', origin, destination, travelmode: 'driving', maptype: 'satellite'});
   if (via) params.set('waypoints', via);
   return 'https://www.google.com/maps/dir/?' + params;
+}
+
+// Projeção Web Mercator, também usada na imagem de satélite de fundo.
+function circuitPreview(trip, legs) {
+  const routePoints = [];
+  const viaPoints = new Map([
+    ['Sorocaba', [-23.50,-47.46]], ['Capão Bonito', [-24.01,-48.35]], ['Guapiara', [-24.19,-48.53]],
+    ['Ribeira', [-24.66,-49.01]], ['Adrianópolis', [-24.66,-48.99]], ['Bocaiúva do Sul', [-25.21,-49.11]],
+    ['Registro', [-24.49,-47.84]], ['Embu das Artes', [-23.65,-46.85]], ['Campinas', [-22.91,-47.06]]
+  ]);
+  const project = ([lat,lon]) => [6378137 * lon * Math.PI/180,
+    6378137 * Math.log(Math.tan(Math.PI/4 + lat * Math.PI/360))];
+  const markers = [];
+  for (let i = 0; i <= legs.length; i++) {
+    const coord = trip.coords?.[i];
+    if (!coord || !coord.every(Number.isFinite) || Math.abs(coord[0]) >= 85) return '';
+    const point = project(coord);
+    routePoints.push(point);
+    markers.push({point, name: i ? legs[i-1][1] : legs[0][0]});
+    if (i < legs.length) {
+      for (const place of (trip.waypoints?.[i] || '').split('|')) {
+        const via = viaPoints.get(place.split(',')[0].trim());
+        if (via) routePoints.push(project(via));
+      }
+    }
+  }
+  const width = 600, height = 350;
+  const xs = routePoints.map(p => p[0]), ys = routePoints.map(p => p[1]);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const scale = Math.max((maxX-minX)/(width-150), (maxY-minY)/(height-55), 1);
+  const left = (minX+maxX-width*scale)/2, top = (minY+maxY+height*scale)/2;
+  const pixel = ([x,y]) => [Math.round((x-left)/scale), Math.round((top-y)/scale)];
+  const line = routePoints.map(p => pixel(p).join(',')).join(' ');
+  const params = new URLSearchParams({bbox:[left,top-height*scale,left+width*scale,top].join(','),
+    bboxSR:'3857',imageSR:'3857',size:'900,525',format:'jpg',f:'image'});
+  const imagery = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?' + params;
+  const labels = markers.filter((m,i) => markers.findIndex(v => v.name === m.name) === i).map(m => {
+    const [x,y] = pixel(m.point);
+    return `<circle cx="${x}" cy="${y}" r="5" fill="#6949df" stroke="white" stroke-width="3"/>
+      <text x="${x+9}" y="${y+4}" fill="white" stroke="#162820" stroke-width="3" paint-order="stroke" font-size="15" font-weight="700">${esc(m.name)}</text>`;
+  }).join('');
+  return `<figure style="margin:8px 0;max-width:680px"><svg viewBox="0 0 600 350" role="img" aria-label="Traçado aproximado do circuito e cidades de pernoite" style="display:block;width:100%;border-radius:10px;background:#31463e">
+    <image href="${esc(imagery)}" width="600" height="350"/>
+    <polyline points="${line}" fill="none" stroke="white" stroke-width="6" stroke-opacity=".8" stroke-linejoin="round"/>
+    <polyline points="${line}" fill="none" stroke="#693ee0" stroke-width="3.5" stroke-linejoin="round"/>${labels}</svg>
+    <figcaption class="muted"><small>Traçado aproximado · Imagem de satélite: Esri, Maxar, Earthstar Geographics e colaboradores.</small></figcaption></figure>`;
 }
 
 function expeditionMap(trip) {
@@ -206,16 +252,16 @@ function expeditionMap(trip) {
   const via = legs.slice(0, -1).map(leg => leg[1] + ', Brasil').join('|');
   const url = mapDirections(origin, destination, via);
   const key = document.getElementById('app')?.dataset.mapsKey;
-  const embed = new URLSearchParams({key: key || '', origin, destination, mode: 'driving'});
+  const embed = new URLSearchParams({key: key || '', origin, destination, mode: 'driving', maptype: 'satellite'});
   if (via) embed.set('waypoints', via);
   return `<section class="step"><h3>Mapa geral da expedição</h3>
     <p>${esc([legs[0][0], ...legs.map(leg => leg[1])].join(' → '))}</p>
-    ${key ? `<iframe title="Mapa do circuito e pernoites" loading="lazy" referrerpolicy="no-referrer-when-downgrade" style="width:100%;height:340px;border:0" src="https://www.google.com/maps/embed/v1/directions?${esc(embed.toString())}"></iframe>` : ''}
+    ${key ? `<iframe title="Mapa do circuito e pernoites" loading="lazy" referrerpolicy="no-referrer-when-downgrade" style="width:100%;height:340px;border:0" src="https://www.google.com/maps/embed/v1/directions?${esc(embed.toString())}"></iframe>` : circuitPreview(trip, legs)}
     <a href="${esc(url)}" target="_blank" rel="noopener">Abrir circuito no Google Maps ↗</a>
     <p class="muted">O circuito mostra os pernoites. Para seguir as paradas de cada dia, abra o mapa da etapa.</p></section>`;
 }
 
-function route(){let x=t();return `${expeditionMap(x)}<div class="detailgrid"><div>${x.stops.map((s,i)=>`<div class="step"><small>${dayLabel(x,stepDay(x,i))}</small><h4>${esc(s)}</h4><span class="tag ok">${x.kms[i]} km ≈ ${esc(x.times[i])}</span> <span class="tag pending">Pavimento a confirmar</span><p><b>${esc(arrival(x,i))}</b></p><p>${esc(x.notes[i])}</p><button onclick="editStep(${i})">Editar etapa</button> <a style="font-size:11px" target="_blank" rel="noopener" href="${esc(mapDirections(s.split(' → ')[0], s.split(' → ')[1] || x.name, x.waypoints?.[i]))}">Abrir etapa no Google Maps ↗</a></div>`).join('')}<button onclick="editStep(-1)">＋ Adicionar etapa</button></div><div class="infobox"><h3>⌁ Um plano, muitos caminhos</h3><div class="row"><span class="muted">Rota selecionada</span><b>${x.chosen?'Alternativa':'Principal'}</b></div><p>${esc(x.chosen?x.alt:x.via)}</p><div class="row"><span class="muted">Tempo ao guidão</span><b>≈ ${esc(x.chosen?x.alth:x.hours)}</b></div><div class="row"><span class="muted">${x.roundTrip?'Distância do circuito':'Distância de ida'}</span><b>≈ ${x.chosen?x.altkm:x.km} km</b></div><p>Os tempos não incluem almoço, trânsito, abastecimento ou visitas. Etapas iniciais correspondem à rota principal; ajuste-as ao escolher outra opção.</p><span class="tag pending">Estimativas · validar no mapa</span><p>Priorize rodovias asfaltadas. Acessos a cachoeiras, obras, pedágios e funcionamento dos atrativos ainda precisam de confirmação.</p><button onclick="tab='Clima';render()">☁ Consultar clima por trecho</button></div></div>`}
+function route(){let x=t();return `${expeditionMap(x)}<div class="detailgrid"><div>${x.stops.map((s,i)=>`<div class="step"><small>${dayLabel(x,stepDay(x,i))}</small><h4>${esc(s)}</h4><span class="tag ok">${x.kms[i]} km ≈ ${esc(x.times[i])}</span> <span class="tag pending">Pavimento a confirmar</span><p><b>${esc(arrival(x,i))}</b></p><p>${esc(x.notes[i])}</p><button onclick="editStep(${i})">Editar etapa</button> <a style="font-size:11px" target="_blank" rel="noopener" href="${esc(mapDirections(s.split(' → ')[0], s.split(' → ')[1] || x.name, x.waypoints?.[i]))}">Abrir etapa no Google Maps ↗</a></div>`).join('')}<button onclick="editStep(-1)">＋ Adicionar etapa</button></div><div class="infobox"><h3>Resumo da rota</h3><p>${esc(x.chosen?x.alt:x.via)}</p><p><b>≈ ${x.chosen?x.altkm:x.km} km · ${esc(x.chosen?x.alth:x.hours)} de pilotagem</b><br><small class="muted">Estimativa sem as paradas.</small></p><button onclick="tab='Clima';render()">☁ Consultar clima por trecho</button></div></div>`}
 function compare(){let x=t();return `<p class="notice">Opções preliminares: confirme distância, tempo, pavimento e bloqueios antes da saída. Não há monitoramento de trânsito em tempo real.</p><table><tr><th>Opção</th><th>Distância estimada</th><th>Tempo</th><th></th></tr>${(x.alt ? [0,1] : [0]).map(i=>`<tr><td><b>${i?'Alternativa':'Principal'}</b><br>${esc(i?x.alt:x.via)}</td><td>≈ ${i?x.altkm:x.km} km</td><td>≈ ${esc(i?x.alth:x.hours)}</td><td><button class="${x.chosen===i?'primary':''}" onclick="t().chosen=${i};save();render();toast('Rota selecionada. Revise as etapas.');">${x.chosen===i?'Selecionada':'Usar rota'}</button></td></tr>`).join('')}</table><button onclick="editTrip(false)">Editar opções de rota</button><p class="notice">O clima abaixo é consultado para os pontos da rota principal. Ao mudar o trajeto, atualize as coordenadas das etapas antes de comparar riscos.</p>`}
 const items=['Revisar pneus e calibragem','Conferir freios, óleo e transmissão','Verificar luzes e bateria','Separar documentos e seguro','Preparar capacete, luvas e botas','Levar capa de chuva e roupa extra','Separar água, kit de reparo e primeiros socorros','Confirmar hospedagem e acesso asfaltado','Revisar previsão, alertas e interdições','Baixar mapas e conferir autonomia'];
 function checklist(){let x=t();return `<p class="muted">${x.checks.length} de ${items.length} itens concluídos · ${esc(x.name)}</p>${items.map((s,i)=>`<label class="check ${x.checks.includes(i)?'done':''}"><input type="checkbox" ${x.checks.includes(i)?'checked':''} onchange="toggleCheck(${i},this.checked)">${s}</label>`).join('')}`}
