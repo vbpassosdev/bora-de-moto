@@ -317,19 +317,23 @@ function circuitPreview(trip, legs) {
 }
 
 function expeditionMap(trip) {
-  if ((trip.id !== expeditionId && trip.status !== 'Concluída') || !trip.stops.length) return '';
+  if (!trip.stops.length) return '';
   const legs = trip.stops.map(stop => stop.split(' → '));
   if (legs.some(leg => leg.length !== 2)) return '';
   const origin = legs[0][0] + ', Brasil';
-  const destination = legs[legs.length - 1][1] + ', Brasil';
+  const lastStop = legs[legs.length - 1][1];
+  const destination = [lastStop, lastStop === trip.name ? trip.state : '', 'Brasil'].filter(Boolean).join(', ');
   const via = legs.slice(0, -1).map(leg => leg[1] + ', Brasil').join('|');
   const url = mapDirections(origin, destination, via);
   const key = document.getElementById('app')?.dataset.mapsKey;
   const embed = new URLSearchParams({key: key || '', origin, destination, mode: 'driving', maptype: 'satellite'});
   if (via) embed.set('waypoints', via);
+  const preview = key ? '' : circuitPreview(trip, legs);
+  const fallback = new URLSearchParams({output: 'embed', saddr: origin, daddr: [via.split('|').filter(Boolean).join(' to:'), destination].filter(Boolean).join(' to:')});
+  const frameUrl = key ? 'https://www.google.com/maps/embed/v1/directions?' + embed : 'https://maps.google.com/maps?' + fallback;
   return `<section class="step"><h3>Mapa geral da ${trip.roundTrip ? 'expedição' : 'viagem'}</h3>
     <p>${esc([legs[0][0], ...legs.map(leg => leg[1])].join(' → '))}</p>
-    ${key ? `<iframe title="Mapa das etapas cadastradas" loading="lazy" referrerpolicy="no-referrer-when-downgrade" style="width:100%;height:340px;border:0" src="https://www.google.com/maps/embed/v1/directions?${esc(embed.toString())}"></iframe>` : circuitPreview(trip, legs)}
+    ${preview || `<iframe title="Mapa das etapas cadastradas" loading="lazy" referrerpolicy="no-referrer-when-downgrade" style="width:100%;height:340px;border:0" src="${esc(frameUrl)}"></iframe>`}
     <a href="${esc(url)}" target="_blank" rel="noopener">Abrir ${trip.roundTrip ? 'circuito' : 'trajeto'} no Google Maps ↗</a>
     <p class="muted">${trip.roundTrip ? 'O circuito mostra os pernoites.' : 'O mapa mostra as etapas cadastradas.'} Abra uma etapa para ver seu trajeto no Google Maps.</p></section>`;
 }
